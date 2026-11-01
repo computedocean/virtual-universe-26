@@ -264,7 +264,7 @@ function route(keep){
   const status=link.parentElement.querySelector('[data-open-skill-status]');
   link.setAttribute('aria-disabled','true');status.textContent='Opening skill...';
   try{
-   const response=await fetch('open-skill',{method:'POST'});
+   const response=await fetch('open-skill',{method:'POST',headers:{'X-Universe-Canvas':'1'}});
    const result=await response.json();
    if(!response.ok)throw new Error(result.error||'Could not open the skill file.');
    status.textContent='Opened in a file tab.';
@@ -274,12 +274,12 @@ function route(keep){
  guide.querySelectorAll('.copy').forEach(c=>c.onclick=async()=>{const ok=await copy(decodeURIComponent(c.dataset.t));c.textContent=ok===false?'Select and copy':'Copied';setTimeout(()=>c.textContent='Copy',1600)});
  guide.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{location.hash=b.dataset.nav?'#/'+b.dataset.nav:'';scrollTo(0,0)});
  const hb=guide.querySelector('[data-help]');hb.onclick=async()=>{hb.disabled=true;const st=guide.querySelector('.helpstatus');
-  try{const r=await fetch('try',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});if(!r.ok)throw 0;st.textContent='Sent. Check the chat.'}
+  try{const r=await fetch('try',{method:'POST',headers:{'Content-Type':'application/json','X-Universe-Canvas':'1'},body:JSON.stringify({id})});if(!r.ok)throw 0;st.textContent='Sent. Check the chat.'}
   catch{hb.disabled=false;st.textContent='Couldn\u2019t send. Try again.'}};
  guide.querySelectorAll('[data-forkopen]').forEach(a=>a.onclick=async e=>{e.preventDefault();
   if(DEMO){ME=demoMe(ME);JUST=true;sessionStorage.demoForked=1;const t=a.dataset.prompt?sessionLink(decodeURIComponent(a.dataset.prompt)):'ghapp://github.com/'+ME.repo;rerender();window.go(t);return}
   if(a.dataset.busy)return;a.dataset.busy=1;a.textContent='Creating your fork\u2026';
-  let r;try{r=await (await fetch('fork',{method:'POST'})).json()}catch{r={error:'Could not reach the canvas. Try again.'}}
+  let r;try{r=await (await fetch('fork',{method:'POST',headers:{'X-Universe-Canvas':'1'}})).json()}catch{r={error:'Could not reach the canvas. Try again.'}}
   if(r.error||!r.fork){a.textContent='Try again';delete a.dataset.busy;const er=guide.querySelector('.forkerr');if(er){er.hidden=false;er.textContent=r.error||'Something went wrong.'}else alert(r.error);return}
   ME=r;JUST=true;const target=a.dataset.prompt?sessionLink(decodeURIComponent(a.dataset.prompt)):'ghapp://github.com/'+ME.fork;rerender();window.go(target)});
  guide.querySelectorAll('[data-refresh]').forEach(r=>r.onclick=async()=>{r.textContent='Checking\u2026';await loadMe(true);rerender()});

@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createServer } from "node:http";
+import { createServer, request } from "node:http";
 import vm from "node:vm";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -11,6 +11,18 @@ import { fileURLToPath } from "node:url";
 const root = new URL("../", import.meta.url);
 const extensionURL = new URL(".github/extensions/universe-cheatsheet-artifact/extension.mjs", root);
 const source = await readFile(extensionURL, "utf8");
+
+// The canvas page sends this header on every POST; other sites can't.
+const CANVAS_POST = { method: "POST", headers: { "X-Universe-Canvas": "1" } };
+
+// Raw request so the test can set Host and Origin, which fetch won't let it forge.
+function rawPost(url, headers) {
+    return new Promise((resolve, reject) => {
+        const req = request(new URL("start", url), { method: "POST", headers }, (res) => { res.resume(); resolve(res.statusCode); });
+        req.on("error", reject);
+        req.end();
+    });
+}
 
 // Replaces the GitHub CLI with a fake repository so the canvas can be driven end to end.
 function fakeGh({ login = "learner", forks = ["learner/virtual-universe-26"], issues = true, openIssues = [], attach = true } = {}) {
@@ -82,11 +94,28 @@ test("the guide page points at /cheatsheet-artifact and serves its images", asyn
     }
 });
 
+test("start rejects cross-site and DNS-rebinding requests", async () => {
+    const { canvas, gh } = await harness();
+    const { url } = await canvas.open({ instanceId: "t" });
+    const self = new URL(url).host;
+    try {
+        // A plain form or fetch POST from another site has no custom header.
+        assert.equal(await rawPost(url, {}), 403);
+        assert.equal(await rawPost(url, { "X-Universe-Canvas": "1", Origin: "https://evil.example" }), 403);
+        assert.equal(await rawPost(url, { "X-Universe-Canvas": "1", Host: `evil.example:${new URL(url).port}` }), 403);
+        assert.equal(gh.calls.length, 0, "rejected requests never reach the GitHub CLI");
+        // The canvas page itself still works.
+        assert.equal(await rawPost(url, { "X-Universe-Canvas": "1", Origin: `http://${self}` }), 200);
+    } finally {
+        await canvas.onClose({ instanceId: "t" });
+    }
+});
+
 test("start creates the issue in the fork and records it for the skill", async () => {
     const { canvas, gh, home } = await harness();
     const { url } = await canvas.open({ instanceId: "t" });
     try {
-        const res = await fetch(new URL("start", url), { method: "POST" });
+        const res = await fetch(new URL("start", url), CANVAS_POST);
         const data = await res.json();
         assert.equal(data.error, undefined);
         assert.equal(data.fork, "learner/virtual-universe-26");
@@ -124,7 +153,7 @@ test("reopening the guide after setup reports the issue instead of repeating it"
     try {
         // Before the issue exists there is nothing to report.
         assert.equal(new URL(launcher.url).searchParams.get("issue"), null);
-        await (await fetch(new URL("start", launcher.url), { method: "POST" })).json();
+        await (await fetch(new URL("start", launcher.url), CANVAS_POST)).json();
 
         const again = await first.canvas.open({ instanceId: "b" });
         const params = new URL(again.url).searchParams;
@@ -141,7 +170,7 @@ test("an old GitHub CLI without --attach still gets a readable issue", async () 
     const { canvas } = await harness(gh);
     const { url } = await canvas.open({ instanceId: "t" });
     try {
-        const data = await (await fetch(new URL("start", url), { method: "POST" })).json();
+        const data = await (await fetch(new URL("start", url), CANVAS_POST)).json();
         assert.equal(data.number, 42);
         const body = gh.bodies.get(42);
         assert.doesNotMatch(body, /<img/);
@@ -156,12 +185,12 @@ test("start forks for a learner who has none, and reuses an existing issue", asy
     const { canvas } = await harness(gh);
     const { url } = await canvas.open({ instanceId: "t" });
     try {
-        const first = await (await fetch(new URL("start", url), { method: "POST" })).json();
+        const first = await (await fetch(new URL("start", url), CANVAS_POST)).json();
         assert.equal(first.fork, "learner/virtual-universe-26");
         assert.ok(gh.calls.some((a) => a[0] === "repo" && a[1] === "fork"));
         assert.ok(gh.calls.some((a) => a[0] === "repo" && a[1] === "edit"));
 
-        const second = await (await fetch(new URL("start", url), { method: "POST" })).json();
+        const second = await (await fetch(new URL("start", url), CANVAS_POST)).json();
         assert.equal(second.number, first.number);
         assert.equal(gh.calls.filter((a) => a[0] === "issue" && a[1] === "create").length, 1);
     } finally {
@@ -173,7 +202,7 @@ test("start explains itself when the learner is not signed in", async () => {
     const { canvas } = await harness(fakeGh({ login: null }));
     const { url } = await canvas.open({ instanceId: "t" });
     try {
-        const data = await (await fetch(new URL("start", url), { method: "POST" })).json();
+        const data = await (await fetch(new URL("start", url), CANVAS_POST)).json();
         assert.match(data.error, /gh auth login/);
         assert.equal(data.link, undefined);
     } finally {

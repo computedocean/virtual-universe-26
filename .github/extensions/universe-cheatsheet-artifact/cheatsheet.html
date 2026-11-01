@@ -83,11 +83,15 @@ const title=()=>document.getElementById('setuptitle');
 const btn=()=>document.getElementById('setupbtn');
 function offer(label,fn){const b=btn();b.hidden=false;b.disabled=false;b.classList.remove('sent');b.textContent=label;b.onclick=fn}
 let running=false;
+// issue and url can come from the page's query string, so build the link with DOM
+// APIs instead of innerHTML and only link to GitHub.
 function done(issue,url){title().textContent='Your issue is ready';
- out().innerHTML='Artifacts will go on <a href="'+url+'">'+issue+'</a>.'}
+ const o=out(),a=document.createElement('a');a.textContent=issue;
+ if(/^https:\/\/github\.com\//.test(url))a.href=url;
+ o.textContent='Artifacts will go on ';o.append(a,'.')}
 async function startIssue(){if(running)return;running=true;btn().hidden=true;
  title().textContent='Setting up your issue\u2026';out().textContent='Finding your fork\u2026';
- try{const r=await fetch('start',{method:'POST'});const d=await r.json();
+ try{const r=await fetch('start',{method:'POST',headers:{'X-Universe-Canvas':'1'}});const d=await r.json();
   if(d.error){title().textContent='Setup failed';out().textContent=d.error;running=false;offer('Try again',startIssue);return}
   done(d.fork+'#'+d.number,d.issueUrl)}
  catch{title().textContent='Setup failed';out().textContent='Could not reach the extension.';running=false;offer('Try again',startIssue)}}
