@@ -202,7 +202,7 @@ function ingestLog(inst, lines) {
                 const pending = inst.execs.get(id);
                 const output = inst.execCurrent?.id === id ? inst.execCurrent.lines : [];
                 inst.execCurrent = null;
-                if (pending) { inst.execs.delete(id); pending({ ok: kind === "ok", output: output.join("\n") }); }
+                if (typeof pending === "function") { inst.execs.delete(id); pending({ ok: kind === "ok", output: output.join("\n") }); }
             }
             continue;
         }

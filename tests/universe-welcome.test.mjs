@@ -106,7 +106,7 @@ test("fork setup follows reading and precedes editing without project switches",
         name: "microsoft-learn", type: "http", url: "https://learn.microsoft.com/api/mcp",
     });
     assert.match(html, /Send to this chat/);
-    for (const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) new vm.Script(script[1]);
+    for (const script of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script[^>]*>/gi)) new vm.Script(script[1]);
 });
 
 test("short launch prompt and instructions preserve deferred-fork boundaries", async () => {

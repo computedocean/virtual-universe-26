@@ -83,6 +83,17 @@ let session;
 
 async function startServer() {
     const server = createServer(async (req, res) => {
+        // Only serve this loopback origin, like the Badge Simulator: reject DNS-rebinding
+        // hosts, foreign origins and POSTs without the page's custom header. A web page
+        // can't send that header cross-origin without a CORS preflight, which this server
+        // never approves, so other sites can't trigger /fork or /try.
+        const self = `127.0.0.1:${server.address().port}`;
+        if (req.headers.host !== self ||
+            (req.headers.origin && req.headers.origin !== `http://${self}`) ||
+            (req.method === "POST" && req.headers["x-universe-canvas"] !== "1")) {
+            res.statusCode = 403;
+            return res.end();
+        }
         if (req.method === "POST" && req.url === "/open-skill") {
             res.setHeader("Content-Type", "application/json");
             try {
